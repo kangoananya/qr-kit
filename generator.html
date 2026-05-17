@@ -164,6 +164,38 @@
       max-width: 100%;
     }
 
+    /* ── Series builder ─────────────────────────────────────────────────────── */
+    .series-box {
+      background: #f8f9fd;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .series-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .series-row .option-group { flex: 1; min-width: 80px; }
+    .series-row .option-group.grow { flex: 2; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
+    #add-series-btn { background: #e6f4ea; color: #1e8e3e; }
+    #add-series-btn:hover { background: #ceead6; }
+
     /* ── Print ───────────────────────────────────────────────────────────────── */
     @media print {
       header, #controls, #label-meta { display: none !important; }
@@ -191,6 +223,36 @@
 </header>
 
 <div id="controls">
+
+  <!-- Series builder -->
+  <div class="series-box">
+    <span class="field-label" style="margin-bottom:0">Series generator</span>
+    <div class="series-row">
+      <div class="option-group grow">
+        <label class="field-label" for="tpl-input">Template — use <code>XX</code> as number placeholder</label>
+        <input id="tpl-input" type="text" placeholder="m0-XX  or  module XX -- Item XX" spellcheck="false" />
+      </div>
+    </div>
+    <div class="series-row">
+      <div class="option-group">
+        <label class="field-label" for="ser-start">Start</label>
+        <input id="ser-start" type="number" value="0" min="0" />
+      </div>
+      <div class="option-group">
+        <label class="field-label" for="ser-end">End</label>
+        <input id="ser-end" type="number" value="5" min="0" />
+      </div>
+      <div class="option-group">
+        <label class="field-label" for="ser-pad">Zero-pad digits</label>
+        <input id="ser-pad" type="number" value="2" min="1" max="6" />
+      </div>
+      <div class="option-group" style="justify-content:flex-end">
+        <button id="add-series-btn">Add Series</button>
+      </div>
+    </div>
+    <div id="ser-preview" style="font-size:0.78rem;color:var(--muted);font-family:'Courier New',monospace;min-height:1.2em"></div>
+  </div>
+
   <div>
     <label class="field-label" for="input">IDs to encode — one per line</label>
     <textarea id="input" spellcheck="false"
@@ -247,6 +309,49 @@ const labelsEl    = document.getElementById('labels');
 const labelArea   = document.getElementById('label-area');
 const labelMeta   = document.getElementById('label-meta');
 
+// ── Series builder ────────────────────────────────────────────────────────────
+const tplInput     = document.getElementById('tpl-input');
+const serStart     = document.getElementById('ser-start');
+const serEnd       = document.getElementById('ser-end');
+const serPad       = document.getElementById('ser-pad');
+const addSeriesBtn = document.getElementById('add-series-btn');
+const serPreview   = document.getElementById('ser-preview');
+
+function buildSeries() {
+  const tpl   = tplInput.value;
+  const start = parseInt(serStart.value, 10);
+  const end   = parseInt(serEnd.value, 10);
+  const pad   = Math.max(1, parseInt(serPad.value, 10) || 2);
+  if (!tpl.includes('XX') || isNaN(start) || isNaN(end) || start > end) return [];
+  const lines = [];
+  for (let i = start; i <= end; i++) {
+    lines.push(tpl.replaceAll('XX', String(i).padStart(pad, '0')));
+  }
+  return lines;
+}
+
+function updatePreview() {
+  const lines = buildSeries();
+  if (lines.length === 0) {
+    serPreview.textContent = '';
+    return;
+  }
+  const shown = lines.slice(0, 3);
+  const suffix = lines.length > 3 ? ` … (+${lines.length - 3} more)` : '';
+  serPreview.textContent = shown.join('  |  ') + suffix;
+}
+
+[tplInput, serStart, serEnd, serPad].forEach(el => el.addEventListener('input', updatePreview));
+
+addSeriesBtn.addEventListener('click', () => {
+  const lines = buildSeries();
+  if (lines.length === 0) return;
+  const existing = inputEl.value.trimEnd();
+  inputEl.value = existing ? existing + '\n' + lines.join('\n') : lines.join('\n');
+  inputEl.scrollTop = inputEl.scrollHeight;
+});
+
+// ── QR generation ─────────────────────────────────────────────────────────────
 generateBtn.addEventListener('click', generateLabels);
 printBtn.addEventListener('click', () => window.print());
 
