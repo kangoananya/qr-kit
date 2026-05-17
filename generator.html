@@ -386,7 +386,7 @@ async function generateLabels() {
   const MM = 3.7795;   // px per mm at 96 dpi
   const qrMm  = heightMm;          // QR fills full height (border is outline only)
   const qrPx  = Math.round(qrMm * MM * 3);  // 3× oversampled for quality
-  const fontPt = Math.max(5, Math.round(heightMm * 0.38));
+  const fontPt = Math.max(6, Math.round(heightMm * 0.45));
 
   generateBtn.disabled = true;
   generateBtn.textContent = 'Generating…';
@@ -400,10 +400,6 @@ async function generateLabels() {
     card.style.height = heightMm + 'mm';
 
     const canvas = document.createElement('canvas');
-    // Canvas display size matches label height; canvas resolution is 3× for quality
-    canvas.style.width  = qrMm + 'mm';
-    canvas.style.height = qrMm + 'mm';
-    canvas.style.flexShrink = '0';
 
     try {
       await QRCode.toCanvas(canvas, id, {
@@ -412,6 +408,12 @@ async function generateLabels() {
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: ecl,
       });
+      // Set display size AFTER QRCode sets canvas pixel dimensions
+      const qrDisplayPx = Math.round(qrMm * MM);
+      canvas.style.width      = qrDisplayPx + 'px';
+      canvas.style.height     = qrDisplayPx + 'px';
+      canvas.style.flexShrink = '0';
+      canvas.style.flexGrow   = '0';
     } catch (err) {
       console.error('QR generation failed for:', id, err);
       const errMsg = document.createElement('div');
