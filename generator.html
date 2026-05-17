@@ -139,29 +139,35 @@
     #labels {
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
-      justify-content: center;
+      gap: 3mm;
+      justify-content: flex-start;
+      padding: 0 4px;
     }
 
+    /* horizontal sticker layout: [QR | text] */
     .label-card {
       background: var(--surface);
       border: 1.5px dashed #bdbdbd;
-      border-radius: 10px;
-      padding: 16px 14px 12px;
+      border-radius: 3px;
+      padding: 0;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       align-items: center;
-      gap: 10px;
+      overflow: hidden;
+      box-sizing: border-box;
+      flex-shrink: 0;
     }
-    .label-card canvas { display: block; }
+    .label-card canvas { display: block; flex-shrink: 0; }
     .label-id {
-      font-size: 0.82rem;
-      font-weight: 700;
-      text-align: center;
-      word-break: break-all;
+      font-weight: 800;
+      text-align: left;
+      word-break: break-word;
       color: var(--text);
-      letter-spacing: 0.04em;
-      max-width: 100%;
+      letter-spacing: 0.03em;
+      flex: 1;
+      padding: 0 2mm;
+      line-height: 1.15;
+      overflow: hidden;
     }
 
     /* ── Series builder ─────────────────────────────────────────────────────── */
@@ -201,9 +207,9 @@
       header, #controls, #label-meta { display: none !important; }
       body { background: #fff; }
       #label-area { padding: 0; }
-      #labels { gap: 3mm; justify-content: flex-start; }
+      #labels { gap: 1.5mm; padding: 0; }
       .label-card {
-        border: 0.4px solid #999;
+        border: 0.3px solid #555;
         border-radius: 0;
         page-break-inside: avoid;
         break-inside: avoid;
@@ -230,7 +236,7 @@
     <div class="series-row">
       <div class="option-group grow">
         <label class="field-label" for="tpl-input">Template — use <code>XX</code> as number placeholder</label>
-        <input id="tpl-input" type="text" placeholder="m0-XX  or  module XX -- Item XX" spellcheck="false" />
+        <input id="tpl-input" type="text" value="m01-XX" placeholder="m01-XX  or  module XX -- Item XX" spellcheck="false" />
       </div>
     </div>
     <div class="series-row">
@@ -261,13 +267,12 @@
 
   <div class="options-row">
     <div class="option-group">
-      <label class="field-label" for="size-select">QR size</label>
-      <select id="size-select">
-        <option value="120">Small (120 px)</option>
-        <option value="160" selected>Medium (160 px)</option>
-        <option value="220">Large (220 px)</option>
-        <option value="280">XL (280 px)</option>
-      </select>
+      <label class="field-label" for="label-w">Width (mm)</label>
+      <input id="label-w" type="number" value="40" min="15" max="200" />
+    </div>
+    <div class="option-group">
+      <label class="field-label" for="label-h">Height (mm)</label>
+      <input id="label-h" type="number" value="15" min="8" max="100" />
     </div>
     <div class="option-group">
       <label class="field-label" for="ecl-select">Error correction</label>
@@ -300,7 +305,8 @@
 // No URLs, no JSON, just the raw value — the scanner publishes rawValue as-is
 
 const inputEl     = document.getElementById('input');
-const sizeSelect  = document.getElementById('size-select');
+const labelWEl    = document.getElementById('label-w');
+const labelHEl    = document.getElementById('label-h');
 const eclSelect   = document.getElementById('ecl-select');
 const generateBtn = document.getElementById('generate-btn');
 const printBtn    = document.getElementById('print-btn');
@@ -372,23 +378,36 @@ async function generateLabels() {
   const ids = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
   if (ids.length === 0) return;
 
-  const size = parseInt(sizeSelect.value, 10);
-  const ecl  = eclSelect.value;
+  const widthMm  = Math.max(15, parseFloat(labelWEl.value)  || 40);
+  const heightMm = Math.max(8,  parseFloat(labelHEl.value) || 15);
+  const ecl      = eclSelect.value;
+
+  // QR is square, fills the label height. Render at 3× pixel density for crisp print.
+  const MM = 3.7795;   // px per mm at 96 dpi
+  const qrMm  = heightMm;          // QR fills full height (border is outline only)
+  const qrPx  = Math.round(qrMm * MM * 3);  // 3× oversampled for quality
+  const fontPt = Math.max(5, Math.round(heightMm * 0.38));
 
   generateBtn.disabled = true;
   generateBtn.textContent = 'Generating…';
   labelsEl.innerHTML = '';
 
   for (const id of ids) {
-    const card   = document.createElement('div');
+    const card = document.createElement('div');
     card.className = 'label-card';
-    card.style.width = (size + 28) + 'px';
+    // Physical size in mm — browser uses these for screen preview and print
+    card.style.width  = widthMm  + 'mm';
+    card.style.height = heightMm + 'mm';
 
     const canvas = document.createElement('canvas');
+    // Canvas display size matches label height; canvas resolution is 3× for quality
+    canvas.style.width  = qrMm + 'mm';
+    canvas.style.height = qrMm + 'mm';
+    canvas.style.flexShrink = '0';
 
     try {
       await QRCode.toCanvas(canvas, id, {
-        width: size,
+        width: qrPx,
         margin: 1,
         color: { dark: '#000000', light: '#ffffff' },
         errorCorrectionLevel: ecl,
@@ -396,7 +415,7 @@ async function generateLabels() {
     } catch (err) {
       console.error('QR generation failed for:', id, err);
       const errMsg = document.createElement('div');
-      errMsg.style.cssText = 'color:#c62828;font-size:0.75rem;padding:8px;text-align:center;max-width:160px;word-break:break-all;';
+      errMsg.style.cssText = 'color:#c62828;font-size:0.7rem;padding:4px;word-break:break-all;';
       errMsg.textContent = `⚠ ${id}: ${err.message}`;
       card.appendChild(errMsg);
       labelsEl.appendChild(card);
@@ -405,6 +424,7 @@ async function generateLabels() {
 
     const labelText = document.createElement('div');
     labelText.className = 'label-id';
+    labelText.style.fontSize = fontPt + 'pt';
     labelText.textContent = id;
 
     card.append(canvas, labelText);
