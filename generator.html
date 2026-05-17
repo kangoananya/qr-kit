@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qr-kit · Label Generator</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f0f2f5;
+      --surface: #ffffff;
+      --border:  #e0e0e0;
+      --accent:  #1a73e8;
+      --text:    #202124;
+      --muted:   #5f6368;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-brand { display: flex; align-items: baseline; gap: 10px; }
+    .logo { font-size: 1rem; font-weight: 800; letter-spacing: -0.03em; color: var(--accent); }
+    .page-title { font-size: 0.9rem; font-weight: 500; color: var(--muted); }
+    header a {
+      font-size: 0.85rem;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 6px 12px;
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      transition: background 0.15s;
+    }
+    header a:hover { background: #e8f0fe; }
+
+    /* ── Controls panel ──────────────────────────────────────────────────────── */
+    #controls {
+      max-width: 560px;
+      margin: 32px auto;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      resize: vertical;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      min-height: 160px;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    .options-row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .option-group { display: flex; flex-direction: column; gap: 6px; }
+
+    select {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus { border-color: var(--accent); }
+
+    .btn-row { display: flex; gap: 10px; }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 22px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.38; cursor: default; transform: none; }
+
+    #generate-btn { background: var(--accent); color: #fff; }
+    #generate-btn:hover:not(:disabled) { opacity: 0.88; }
+    #print-btn { background: #e8f0fe; color: var(--accent); }
+    #print-btn:hover:not(:disabled) { background: #d2e3fc; }
+
+    /* ── Label area ──────────────────────────────────────────────────────────── */
+    #label-area { padding: 8px 20px 48px; }
+
+    #label-meta {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 20px;
+    }
+
+    #labels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: center;
+    }
+
+    .label-card {
+      background: var(--surface);
+      border: 1.5px dashed #bdbdbd;
+      border-radius: 10px;
+      padding: 16px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .label-card canvas { display: block; }
+    .label-id {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-align: center;
+      word-break: break-all;
+      color: var(--text);
+      letter-spacing: 0.04em;
+      max-width: 100%;
+    }
+
+    /* ── Print ───────────────────────────────────────────────────────────────── */
+    @media print {
+      header, #controls, #label-meta { display: none !important; }
+      body { background: #fff; }
+      #label-area { padding: 0; }
+      #labels { gap: 3mm; justify-content: flex-start; }
+      .label-card {
+        border: 0.4px solid #999;
+        border-radius: 0;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .label-id { color: #000; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <span class="logo">qr-kit</span>
+    <span class="page-title">Label Generator</span>
+  </div>
+  <a href="index.html">← Scanner</a>
+</header>
+
+<div id="controls">
+  <div>
+    <label class="field-label" for="input">IDs to encode — one per line</label>
+    <textarea id="input" spellcheck="false"
+      placeholder="shelf-A1&#10;shelf-A2&#10;door-3&#10;47&#10;item-0042"></textarea>
+  </div>
+
+  <div class="options-row">
+    <div class="option-group">
+      <label class="field-label" for="size-select">QR size</label>
+      <select id="size-select">
+        <option value="120">Small (120 px)</option>
+        <option value="160" selected>Medium (160 px)</option>
+        <option value="220">Large (220 px)</option>
+        <option value="280">XL (280 px)</option>
+      </select>
+    </div>
+    <div class="option-group">
+      <label class="field-label" for="ecl-select">Error correction</label>
+      <select id="ecl-select">
+        <option value="L">L — low</option>
+        <option value="M" selected>M — medium</option>
+        <option value="H">H — high (use if sticker may get dirty)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="generate-btn">Generate Labels</button>
+    <button id="print-btn" disabled>Print / Save PDF</button>
+  </div>
+</div>
+
+<div id="label-area" style="display:none">
+  <div id="label-meta"></div>
+  <div id="labels"></div>
+</div>
+
+<!-- QR code generation (client-side, no server) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+'use strict';
+
+// QR codes should encode bare identifiers only — e.g. "47", "shelf-A1", "door-3"
+// No URLs, no JSON, just the raw value — the scanner publishes rawValue as-is
+
+const inputEl     = document.getElementById('input');
+const sizeSelect  = document.getElementById('size-select');
+const eclSelect   = document.getElementById('ecl-select');
+const generateBtn = document.getElementById('generate-btn');
+const printBtn    = document.getElementById('print-btn');
+const labelsEl    = document.getElementById('labels');
+const labelArea   = document.getElementById('label-area');
+const labelMeta   = document.getElementById('label-meta');
+
+generateBtn.addEventListener('click', generateLabels);
+printBtn.addEventListener('click', () => window.print());
+
+// Also generate on Ctrl+Enter in the textarea
+inputEl.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generateLabels();
+});
+
+async function generateLabels() {
+  const raw = inputEl.value.trim();
+  if (!raw) return;
+
+  const ids = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+  if (ids.length === 0) return;
+
+  const size = parseInt(sizeSelect.value, 10);
+  const ecl  = eclSelect.value;
+
+  generateBtn.disabled = true;
+  generateBtn.textContent = 'Generating…';
+  labelsEl.innerHTML = '';
+
+  for (const id of ids) {
+    const card   = document.createElement('div');
+    card.className = 'label-card';
+    card.style.width = (size + 28) + 'px';
+
+    const canvas = document.createElement('canvas');
+
+    try {
+      await QRCode.toCanvas(canvas, id, {
+        width: size,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+        errorCorrectionLevel: ecl,
+      });
+    } catch (err) {
+      console.error('QR generation failed for:', id, err);
+      continue;
+    }
+
+    const labelText = document.createElement('div');
+    labelText.className = 'label-id';
+    labelText.textContent = id;
+
+    card.append(canvas, labelText);
+    labelsEl.appendChild(card);
+  }
+
+  const n = labelsEl.children.length;
+  labelMeta.textContent = `${n} label${n !== 1 ? 's' : ''} — use Print / Save PDF to produce stickers`;
+  labelArea.style.display = 'block';
+  printBtn.disabled = false;
+
+  generateBtn.disabled = false;
+  generateBtn.textContent = 'Generate Labels';
+
+  labelsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>

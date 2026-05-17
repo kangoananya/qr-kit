@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>qr-kit · Scanner</title>
+
+  <!-- Deploy: push to GitHub repo → Settings → Pages → main branch → save         -->
+  <!-- Requires HTTPS (GitHub Pages) — camera needs a secure context                 -->
+  <!-- BarcodeDetector path: Android/desktop Chrome 90+                              -->
+  <!-- jsQR fallback path:   iOS Safari 14.3+, Firefox, Samsung Internet             -->
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      height: 100dvh;
+      width: 100vw;
+    }
+
+    #video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    /* ── Status bar ─────────────────────────────────────────────────────────── */
+    #status-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.58);
+      font-size: 13px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    #status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f44336;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    #status-dot.connected { background: #4caf50; }
+
+    #status-text { flex: 1; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    #nav-link {
+      font-size: 11px;
+      color: rgba(255,255,255,0.65);
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 10px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    #nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
+
+    /* ── Green flash overlay ────────────────────────────────────────────────── */
+    #scan-flash {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      background: rgba(0, 230, 80, 0.28);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.08s ease-in;
+    }
+    #scan-flash.active { opacity: 1; }
+
+    /* ── Scanned ID label ───────────────────────────────────────────────────── */
+    #scan-label {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      font-size: clamp(2rem, 14vw, 5.5rem);
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      color: #fff;
+      text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 14px;
+      padding: 0.2em 0.6em;
+      opacity: 0;
+      transition: opacity 0.12s ease-in;
+      max-width: 90vw;
+      word-break: break-all;
+      text-align: center;
+      pointer-events: none;
+    }
+    #scan-label.visible { opacity: 1; }
+
+    /* ── Error screen ───────────────────────────────────────────────────────── */
+    #error-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #0d0d0d;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      gap: 1rem;
+    }
+    #error-screen.show { display: flex; }
+    #error-screen h2 { font-size: 1.4rem; color: #ef5350; margin-bottom: 0.25rem; }
+    #error-screen p  { color: #9e9e9e; line-height: 1.7; max-width: 360px; }
+    #error-screen code { color: #80cbc4; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+
+<!-- QR codes should encode bare identifiers only — e.g. "47", "shelf-A1", "door-3" -->
+<!-- Generate them at: https://www.qr-code-generator.com or any tool, set content to just the ID -->
+<!-- No URLs, no JSON, just the raw value                                                        -->
+
+<video id="video" autoplay muted playsinline></video>
+
+<div id="status-bar">
+  <div id="status-dot"></div>
+  <span id="status-text">Connecting…</span>
+  <a id="nav-link" href="generator.html">Labels</a>
+</div>
+
+<div id="scan-flash"></div>
+<div id="scan-label"></div>
+
+<div id="error-screen">
+  <h2>Camera unavailable</h2>
+  <p>Could not access the camera.<br>
+     Allow camera permission and ensure you are on <strong>HTTPS</strong>.</p>
+</div>
+
+<!-- jsQR — pure-JS QR fallback for iOS Safari and browsers without BarcodeDetector -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<!-- Paho MQTT over WebSocket (no build step required) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"
+        integrity="sha512-Y2KKDMT7PoQWOeAGqkqGFTKQREDmOpjzBJBB6zPKoGPtVVVjJNbh4O4HNVOvIi7zSmYlFJdJK6yBSo1HkxLlQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+'use strict';
+
+// ─── MQTT Configuration ───────────────────────────────────────────────────────
+const BROKER    = 'wss://broker.hivemq.com:8884/mqtt';
+const TOPIC     = 'qr/yourname/scan';  // change to something unique
+const CLIENT_ID = 'scanner-' + Math.random().toString(36).slice(2, 8);
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Deploy: push to GitHub repo → Settings → Pages → main branch → save
+// Requires HTTPS (GitHub Pages) — camera needs a secure context
+// BarcodeDetector path: Android/desktop Chrome 90+
+// jsQR fallback path:   iOS Safari 14.3+, Firefox, Samsung Internet
+
+const video       = document.getElementById('video');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const scanFlash   = document.getElementById('scan-flash');
+const scanLabel   = document.getElementById('scan-label');
+const errorScreen = document.getElementById('error-screen');
+
+// ── Scan engine: native BarcodeDetector or jsQR JS fallback (iOS / Firefox) ─────
+const USE_NATIVE = 'BarcodeDetector' in window;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let mqttConnected = false;
+let lastValue     = null;
+let lastPublishAt = 0;
+const DEBOUNCE_MS = 2000;   // ignore same value for 2 s after publish
+
+let flashTimer = null;
+let labelTimer = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setStatus(connected, text) {
+  mqttConnected = connected;
+  statusDot.className = connected ? 'connected' : '';
+  statusText.textContent = text;
+}
+
+// ── MQTT ──────────────────────────────────────────────────────────────────────
+const client = new Paho.Client(BROKER, CLIENT_ID);
+
+client.onConnectionLost = (response) => {
+  setStatus(false, `Disconnected – reconnecting… (${response.errorMessage || 'lost'})`);
+  setTimeout(mqttConnect, 3000);
+};
+
+function mqttConnect() {
+  setStatus(false, 'Connecting to broker…');
+  client.connect({
+    useSSL: true,
+    timeout: 10,
+    keepAliveInterval: 30,
+    cleanSession: true,
+    onSuccess() {
+      setStatus(true, `Connected · ${TOPIC}`);
+    },
+    onFailure(err) {
+      setStatus(false, `Connect failed – retrying… (${err.errorMessage || 'unknown'})`);
+      setTimeout(mqttConnect, 5000);
+    },
+  });
+}
+
+mqttConnect();
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+  } catch (err) {
+    setStatus(false, `Camera error: ${err.message}`);
+    errorScreen.classList.add('show');
+  }
+}
+
+startCamera();
+
+// ── Scan engine setup ───────────────────────────────────────────────────────────
+const detector = USE_NATIVE ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+
+// Offscreen canvas used by the jsQR fallback path
+const canvas = document.createElement('canvas');
+const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+
+function onDetected(rawValue) {
+  const now = Date.now();
+
+  // Debounce: skip if same value within DEBOUNCE_MS
+  if (rawValue === lastValue && now - lastPublishAt < DEBOUNCE_MS) return;
+
+  lastValue     = rawValue;
+  lastPublishAt = now;
+
+  // Publish to MQTT
+  if (mqttConnected) {
+    try {
+      const msg = new Paho.Message(rawValue);
+      msg.destinationName = TOPIC;
+      msg.qos = 1;
+      msg.retained = false;
+      client.send(msg);
+    } catch (e) {
+      // send errors are non-fatal; reconnect will handle it
+    }
+  }
+
+  // Haptic feedback
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // Green flash overlay
+  clearTimeout(flashTimer);
+  scanFlash.classList.add('active');
+  flashTimer = setTimeout(() => scanFlash.classList.remove('active'), 180);
+
+  // Large ID in center, fades after 2 s
+  clearTimeout(labelTimer);
+  scanLabel.textContent = rawValue;
+  scanLabel.classList.add('visible');
+  labelTimer = setTimeout(() => scanLabel.classList.remove('visible'), 2000);
+
+  // Update status bar with last scanned value
+  setStatus(mqttConnected, `${mqttConnected ? 'Connected' : 'Offline'} · Last: ${rawValue}`);
+}
+
+setInterval(async () => {
+  if (video.readyState < video.HAVE_ENOUGH_DATA) return;
+  try {
+    if (USE_NATIVE) {
+      // Fast path: native BarcodeDetector (Android/desktop Chrome)
+      const barcodes = await detector.detect(video);
+      if (barcodes.length > 0) onDetected(barcodes[0].rawValue);
+    } else {
+      // Fallback path: jsQR canvas decode (iOS Safari, Firefox, etc.)
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const result = jsQR(imageData.data, imageData.width, imageData.height);
+      if (result) onDetected(result.data);
+    }
+  } catch {
+    // Detection errors are non-fatal; just skip the frame
+  }
+}, 300);
+</script>
+</body>
+</html>
