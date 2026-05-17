@@ -361,6 +361,12 @@ inputEl.addEventListener('keydown', (e) => {
 });
 
 async function generateLabels() {
+  if (typeof QRCode === 'undefined') {
+    labelMeta.textContent = 'Error: QR library failed to load — check your internet connection and refresh.';
+    labelArea.style.display = 'block';
+    return;
+  }
+
   const raw = inputEl.value.trim();
   if (!raw) return;
 
@@ -390,6 +396,12 @@ async function generateLabels() {
       });
     } catch (err) {
       console.error('QR generation failed for:', id, err);
+      // Show the failure on the card so it's visible
+      const errMsg = document.createElement('div');
+      errMsg.style.cssText = 'color:#c62828;font-size:0.75rem;padding:8px;text-align:center;max-width:160px;word-break:break-all;';
+      errMsg.textContent = `⚠ ${id}: ${err.message}`;
+      card.appendChild(errMsg);
+      labelsEl.appendChild(card);
       continue;
     }
 
