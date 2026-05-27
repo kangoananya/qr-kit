@@ -127,7 +127,7 @@ STYLE_MAP = {
 EC_MAP = {"L": qrcode.constants.ERROR_CORRECT_L, "M": qrcode.constants.ERROR_CORRECT_M,
           "Q": qrcode.constants.ERROR_CORRECT_Q, "H": qrcode.constants.ERROR_CORRECT_H}
 
-
+FONT_PATHS = [
     "C:/Windows/Fonts/arialbd.ttf",
     "C:/Windows/Fonts/Arial_Bold.ttf",
     "C:/Windows/Fonts/calibrib.ttf",
