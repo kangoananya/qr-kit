@@ -206,7 +206,7 @@
     @media print {
       @page {
         size: 62mm 29mm;
-        margin: 3mm;
+        margin: 0;
       }
       header, #controls, #label-meta { display: none !important; }
       body { background: #fff; }
@@ -219,8 +219,10 @@
       .label-card {
         border: none;
         border-radius: 0;
-        width: 56mm !important;
-        height: 23mm !important;
+        width: 62mm !important;
+        height: 29mm !important;
+        padding: 3mm !important;
+        box-sizing: border-box !important;
         page-break-after: always;
         break-after: page;
         page-break-inside: avoid;
@@ -229,6 +231,12 @@
       .label-card:last-child {
         page-break-after: avoid;
         break-after: avoid;
+      }
+      /* Scale QR canvas to fit within the padded content area */
+      .label-card canvas {
+        height: 100% !important;
+        width: auto !important;
+        flex-shrink: 0 !important;
       }
       .label-id { color: #000; }
     }
