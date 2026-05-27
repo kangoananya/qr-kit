@@ -1,0 +1,12 @@
+# Auth tokens — never commit these
+daemon/token.json
+daemon/credentials.json
+
+# Generated preview images
+daemon/preview_label.png
+daemon/preview_label_actual_size.png
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

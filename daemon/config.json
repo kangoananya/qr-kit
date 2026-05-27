@@ -1,0 +1,23 @@
+{
+  "spreadsheet_id": "1fMdMwSry5nKGLxr3ReLSy3woBum03AeIddVNQ6HDDIg",
+  "sheet_name": "Beams",
+  "qr_col": "B",
+  "print_col": "H",
+  "label_w_mm": 62,
+  "label_h_mm": 29,
+  "label_type": "62x29",
+  "model": "QL-1060N",
+  "printer_uri": "tcp://192.168.55.102",
+  "poll_interval_seconds": 3,
+
+  "margin_mm": 2,
+  "qr_fraction": 1.0,
+  "qr_dark": "#000000",
+  "qr_light": "#ffffff",
+  "qr_border": 1,
+  "qr_error_correction": "M",
+  "qr_style": "square",
+  "show_text": true,
+  "font_size_fraction": 0.25,
+  "gap_mm": 5
+}
