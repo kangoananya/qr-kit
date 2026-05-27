@@ -204,15 +204,31 @@
 
     /* ── Print ───────────────────────────────────────────────────────────────── */
     @media print {
+      @page {
+        size: 62mm 29mm;
+        margin: 0;
+      }
       header, #controls, #label-meta { display: none !important; }
       body { background: #fff; }
       #label-area { padding: 0; }
-      #labels { gap: 1.5mm; padding: 0; }
+      #labels {
+        display: block;
+        gap: 0;
+        padding: 0;
+      }
       .label-card {
-        border: 0.3px solid #555;
+        border: none;
         border-radius: 0;
+        width: 62mm !important;
+        height: 29mm !important;
+        page-break-after: always;
+        break-after: page;
         page-break-inside: avoid;
         break-inside: avoid;
+      }
+      .label-card:last-child {
+        page-break-after: avoid;
+        break-after: avoid;
       }
       .label-id { color: #000; }
     }
@@ -268,11 +284,11 @@
   <div class="options-row">
     <div class="option-group">
       <label class="field-label" for="label-w">Width (mm)</label>
-      <input id="label-w" type="number" value="40" min="15" max="200" />
+      <input id="label-w" type="number" value="62" min="15" max="200" />
     </div>
     <div class="option-group">
       <label class="field-label" for="label-h">Height (mm)</label>
-      <input id="label-h" type="number" value="15" min="8" max="100" />
+      <input id="label-h" type="number" value="29" min="8" max="100" />
     </div>
     <div class="option-group">
       <label class="field-label" for="ecl-select">Error correction</label>
