@@ -106,41 +106,43 @@
     }
     #scan-label.visible { opacity: 1; }
 
-    /* ── Send button ─────────────────────────────────────────────────────────── */
-    #send-btn {
+    /* ── Action buttons ──────────────────────────────────────────────────────── */
+    #btn-row {
       position: fixed;
       bottom: 44px;
       left: 50%;
-      transform: translateX(-50%) scale(0.9);
+      transform: translateX(-50%);
       z-index: 30;
+      display: flex;
+      gap: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+    #btn-row.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ── Send button ─────────────────────────────────────────────────────────── */
+    #send-btn, #confirm-btn {
       background: #1a73e8;
       color: #fff;
       border: none;
       border-radius: 16px;
-      padding: 18px 36px;
-      font-size: 1.15rem;
+      padding: 18px 28px;
+      font-size: 1.05rem;
       font-weight: 800;
       letter-spacing: 0.02em;
       cursor: pointer;
       box-shadow: 0 6px 24px rgba(0,0,0,0.55);
-      max-width: 88vw;
-      text-align: center;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.15s ease, transform 0.15s ease;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
-    #send-btn.visible {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translateX(-50%) scale(1);
-    }
-    #send-btn.sent {
-      background: #2e7d32;
-      pointer-events: none;
-    }
+    #send-btn:active, #confirm-btn:active { transform: scale(0.96); }
+    #confirm-btn { background: #2e7d32; }
+    #send-btn.sent    { background: #555; pointer-events: none; }
+    #confirm-btn.sent { background: #555; pointer-events: none; }
 
     /* ── Error screen ───────────────────────────────────────────────────────── */
     #error-screen {
@@ -178,7 +180,10 @@
 
 <div id="scan-flash"></div>
 <div id="scan-label"></div>
-<button id="send-btn"></button>
+<div id="btn-row">
+  <button id="send-btn">Select</button>
+  <button id="confirm-btn">&#10003; Confirm</button>
+</div>
 
 <div id="error-screen">
   <h2>Camera unavailable</h2>
@@ -214,7 +219,9 @@ const statusDot   = document.getElementById('status-dot');
 const statusText  = document.getElementById('status-text');
 const scanFlash   = document.getElementById('scan-flash');
 const scanLabel   = document.getElementById('scan-label');
+const btnRow      = document.getElementById('btn-row');
 const sendBtn     = document.getElementById('send-btn');
+const confirmBtn  = document.getElementById('confirm-btn');
 const errorScreen = document.getElementById('error-screen');
 
 // ── Scan engine: native BarcodeDetector or jsQR JS fallback (iOS / Firefox) ─────
@@ -293,10 +300,10 @@ const detector = USE_NATIVE ? new BarcodeDetector({ formats: ['qr_code'] }) : nu
 const canvas = document.createElement('canvas');
 const ctx    = canvas.getContext('2d', { willReadFrequently: true });
 
-function publishId(id) {
+function mqttSend(payload) {
   if (mqttConnected) {
     try {
-      const msg = new Paho.Message(id);
+      const msg = new Paho.Message(payload);
       msg.destinationName = TOPIC;
       msg.qos = 1;
       msg.retained = false;
@@ -305,22 +312,38 @@ function publishId(id) {
       // send errors are non-fatal; reconnect will handle it
     }
   }
-
   if (navigator.vibrate) navigator.vibrate(100);
-
   clearTimeout(flashTimer);
   scanFlash.classList.add('active');
   flashTimer = setTimeout(() => scanFlash.classList.remove('active'), 180);
+}
 
+function publishId(id) {
+  mqttSend(id);
   sendBtn.textContent = '\u2713 Sent!';
   sendBtn.classList.add('sent');
   clearTimeout(sendBtnTimer);
   sendBtnTimer = setTimeout(() => {
-    sendBtn.classList.remove('visible', 'sent');
+    btnRow.classList.remove('visible');
+    sendBtn.classList.remove('sent');
+    confirmBtn.classList.remove('sent');
     pendingId = null;
   }, 1400);
+  setStatus(mqttConnected, `${mqttConnected ? 'Connected' : 'Offline'} \u00b7 Selected: ${id}`);
+}
 
-  setStatus(mqttConnected, `${mqttConnected ? 'Connected' : 'Offline'} \u00b7 Sent: ${id}`);
+function publishConfirm(id) {
+  mqttSend('confirm:' + id);
+  confirmBtn.textContent = '\u2713 Confirmed!';
+  confirmBtn.classList.add('sent');
+  clearTimeout(sendBtnTimer);
+  sendBtnTimer = setTimeout(() => {
+    btnRow.classList.remove('visible');
+    sendBtn.classList.remove('sent');
+    confirmBtn.classList.remove('sent');
+    pendingId = null;
+  }, 1800);
+  setStatus(mqttConnected, `${mqttConnected ? 'Connected' : 'Offline'} \u00b7 Confirmed: ${id}`);
 }
 
 function onDetected(rawValue) {
@@ -344,23 +367,26 @@ function onDetected(rawValue) {
   scanLabel.classList.add('visible');
   labelTimer = setTimeout(() => scanLabel.classList.remove('visible'), 5000);
 
-  // Show send button
-  sendBtn.textContent = `Send: ${rawValue}`;
+  // Show action buttons
+  sendBtn.textContent = `Select: ${rawValue}`;
+  confirmBtn.textContent = `\u2713 Confirm: ${rawValue}`;
   sendBtn.classList.remove('sent');
-  sendBtn.classList.add('visible');
+  confirmBtn.classList.remove('sent');
+  btnRow.classList.add('visible');
   clearTimeout(sendBtnTimer);
   // Auto-dismiss if not pressed after 8 s
   sendBtnTimer = setTimeout(() => {
-    sendBtn.classList.remove('visible', 'sent');
+    btnRow.classList.remove('visible');
+    sendBtn.classList.remove('sent');
+    confirmBtn.classList.remove('sent');
     pendingId = null;
   }, 8000);
 
   setStatus(mqttConnected, `${mqttConnected ? 'Connected' : 'Offline'} \u00b7 Detected: ${rawValue}`);
 }
 
-sendBtn.addEventListener('click', () => {
-  if (pendingId) publishId(pendingId);
-});
+sendBtn.addEventListener('click',    () => { if (pendingId) publishId(pendingId); });
+confirmBtn.addEventListener('click', () => { if (pendingId) publishConfirm(pendingId); });
 
 setInterval(async () => {
   if (video.readyState < video.HAVE_ENOUGH_DATA) return;
